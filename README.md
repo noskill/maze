@@ -10,7 +10,7 @@ python tester.py test_maze_01.txt
 
 or with vizualisation:
 
-python tester.py test_maze_01.txt
+python tester.py test_maze_01.txt --gui
 
 To show map run:
 
