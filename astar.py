@@ -10,8 +10,8 @@ def search(initial, is_goal, heuristic, actions):
     Searches for path from initial state to goal state using A* algorithm
     Parameters
     -------
-    initial: tuple
-        ((x,y), 3x3 orientation)
+    initial: hashable
+        initial state
     is_goal: callable
         accepts state, returns true if state is a goal state
     heuristic: callable
@@ -23,14 +23,13 @@ def search(initial, is_goal, heuristic, actions):
     -------
     list of (action to apply in state, state) pairs leading from initial state to a goal state
     """
-    # path_cost={curretn_pos:prev_pos,cost      , prev action}
+    # path_cost={curretn_pos:prev_pos,cost , prev action}
     path_cost = { initial: (None, heuristic(initial), None)}
     open = set()
     open.add(initial)
     explored = set()
     queue = Queue.PriorityQueue()
-    #todo remove state access
-    import pdb;pdb.set_trace()
+    # put initial state with the cost from path_cost
     queue.put((path_cost[initial][1], initial))
 
     found = False  # flag that is set when search is complet

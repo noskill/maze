@@ -1,7 +1,7 @@
 import pygame
 from maze import Maze
 from robot import Robot
-from image import Image
+from image import Image, DummyImage
 import threading
 import sys
 
@@ -21,6 +21,7 @@ train_score_mult = 1/30.
 
 done = False
 game_objects = []
+
 def pygame_loop():
     clock = pygame.time.Clock()
     while not done:
@@ -33,21 +34,27 @@ def pygame_loop():
             o.update(ms)
         pygame.display.update()
 
+
 def run():
     '''
     This script tests a robot based on the code in robot.py on a maze given
     as an argument when running the script.
     '''
 
+    gui = False
+    if 3 <= len(sys.argv) and sys.argv[2] == '--gui':
+        gui = True
     # Create a maze based on input argument on command line.
     testmaze = Maze( str(sys.argv[1]) )
-    pygame.init()
-    size = 50 * testmaze.dim + 100
-    screen = pygame.display.set_mode((size, size))
-    image = Image(testmaze.dim, screen)
-    thread = threading.Thread(target=pygame_loop)
-    thread.start()
-
+    if gui:
+        pygame.init()
+        size = 50 * testmaze.dim + 100
+        screen = pygame.display.set_mode((size, size))
+        image = Image(testmaze.dim, screen)
+        thread = threading.Thread(target=pygame_loop)
+        thread.start()
+    else:
+        image = DummyImage()
     # Intitialize a robot; robot receives info about maze dimensions.
 
     game_objects.append(image)
@@ -137,7 +144,8 @@ def run():
     if len(runtimes) == 2:
         print "Task complete! Score: {:4.3f}".format(runtimes[1] + train_score_mult*runtimes[0])
         done = True
-    thread.join()
+    if gui:
+        thread.join()
 
 
 

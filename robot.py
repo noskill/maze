@@ -3,7 +3,10 @@ import astar
 from math import pi
 import numpy
 from mouse_map import Map
+import logging
 
+
+logger = logging.getLogger()
 np = numpy
 
 def angle(v1, v2):
@@ -118,19 +121,22 @@ class Robot(object):
         ang = result[0]
         if ang < 0:
             self.ori = numpy.dot(self.RLeft, self.ori)
-            print "rotate left"
+            logger.info("rotate left")
         if 0 < ang:
             self.ori = numpy.dot(self.RRight, self.ori)
-            print "rotate right"
+            logger.info("rotate right")
 
         if result[1] != 0:
             self.pos = numpy.dot(self.ori, [0, result[1]]) + self.pos
-            print "move forward"
+            logger.info("move forward")
 
-        print "\n"
         return result
 
     def explore_run(self, sensors):
+        """
+        Explore potentially optimal paths from start position to the goal
+        using a-star algorithm
+        """
         self.process_sensors(sensors)
         def on_map_change():
             initial = ((0, 0), ((1, 0), (0,1)))
@@ -139,7 +145,7 @@ class Robot(object):
             heuristic = lambda (pos, ori): self.map[pos]/3.0
             actions_with_turn = lambda (pos, ori): self.possible_actions(pos, ori, rotate_and_move=True)
             self.path = astar.search(initial, is_goal, heuristic, actions_with_turn)
-            print "New path: ", self.path
+            logger.info("New path: ", self.path)
             self.to_explore = []
             for item in self.path:
                 pos = item[1][0]
@@ -148,8 +154,8 @@ class Robot(object):
         if self.path is None:
             on_map_change()
         self.call_on_map_change = on_map_change
-        print "To explore: ", self.to_explore
-        print "Pos: ", self.pos
+        logger.info("To explore: ", self.to_explore)
+        logger.info("Pos: ", self.pos)
 
         if len(self.to_explore) and all(self.pos == self.to_explore[-1]):
             self.to_explore.pop(-1)
@@ -168,23 +174,29 @@ class Robot(object):
         return path[-1][0]
 
     def reset(self):
+        """
+        Set position and orientation to initial values
+        """
         self._pos = numpy.asarray([0,0])
         self._ori = numpy.asarray([[1, 0],[0, 1]])
         self.image.reset_arrow()
 
     def zero_run(self, sensors):
+        """
+        compute next movement using flood fill algorithm
+        """
         x, y = self.pos
-        print "ori: {}".format(self.ori)
-        print "Pos: {}".format(self.pos)
         if self.is_goal(x, y):
             self.run += 1
             return self.explore_run(sensors)
         # process sensors
         self.process_sensors(sensors)
-        print str(self.map)
-        return self.next_step()
+        return self.flood_fill_next_step()
 
     def final_run(self, sensors):
+        """
+        Returns actions from exploration run
+        """
         next_item = self.path.pop(-1)
         return next_item[0]
 
@@ -193,9 +205,9 @@ class Robot(object):
         Returns all (state, action to achive state) pairs directly achiveable given robot's position
         and orientation
         -------
-        pos: numpy.array 1x2 or tuple 
+        pos: numpy.array 1x2 or tuple
             robot's position
-        ori: numpy.array 3x3 or tuple 
+        ori: numpy.array 3x3 or tuple
              robot's orientation matrix
         rotate_and_move: bool
             if true allow rotate and move actions
@@ -228,6 +240,18 @@ class Robot(object):
         return result
 
     def get_rotation(self, pos, ori, target_pos):
+        """
+        returns angle to rotate towards target position in radians
+        -------
+        pos: numpy.array 1x2 or tuple
+        position
+        ori: numpy.array 3x3 or tuple
+        current orientation
+        target_pos: numpy.array 1x2 or tuple
+        postion to rotate to
+        -------
+        returns angle in radians, clockwise rotatation has negative sign
+        """
         ang =  angle(numpy.dot(ori, [0,1]), target_pos - pos)
         if pi < abs(ang):
             ang = ang % pi * -ang/(abs(ang))
@@ -239,6 +263,9 @@ class Robot(object):
         return False
 
     def process_sensors(self, a_sensors):
+        """
+        Checks if new walls were found, if so updates the map
+        """
         # +1 becouse, there is nothing to rotate if sensors is zero
         sensors = [(u + 1) for u in a_sensors]
 
@@ -261,7 +288,7 @@ class Robot(object):
             m_to += self.pos
             if self.is_valid(*m_to):
                 if self.map.is_connected(m_from, m_to):
-                    print "Remove edge {0} to {1}".format(m_from, m_to)
+                    logger.info("Remove edge {0} to {1}".format(m_from, m_to))
                     self.map.remove_edge(m_from, m_to)
                     self.update_map_from(m_to)
                     self.update_map_from(m_from)
@@ -278,7 +305,10 @@ class Robot(object):
                 candidate_pos.append(neib)
         return candidate_pos
 
-    def next_step(self):
+    def flood_fill_next_step(self):
+        """
+        compute next movement using flood fill algorithm
+        """
         candidate_pos = self.get_candidate_pos(self.pos)
         best = candidate_pos[0], self.map[candidate_pos[0]]
         candidate_pos.pop(0)
@@ -302,6 +332,10 @@ class Robot(object):
         return result
 
     def update_map_from(self, pos):
+        """
+        Update map from given position so that every cell except the goal have
+        value (1 + value of smallest neighbour values).
+        """
         stack = [pos]
         while 0 < len(stack):
             pos = numpy.asarray(stack.pop(0))
@@ -316,14 +350,13 @@ class Robot(object):
                     tmp.append(neib)
                     if self.map[neib] < min_dist:
                         min_dist = self.map[neib]
-            if min_dist == sys.maxint:
-                import pdb;pdb.set_trace()
+            assert(min_dist != sys.maxint)
             if self.map[pos] < min_dist + 1:
-                print pos
-                print "before {}".format(self.map[pos])
+                logger.info(pos)
+                logger.info("before {}".format(self.map[pos]))
                 self.map[pos] = min_dist + 1
                 self.image.update_text(pos, min_dist + 1)
-                print "after {}".format(self.map[pos])
+                logger.info("after {}".format(self.map[pos]))
                 stack.extend(tmp)
 
 
