@@ -141,8 +141,8 @@ class Robot(object):
         def on_map_change():
             initial = ((0, 0), ((1, 0), (0,1)))
             is_goal = lambda ((x, y), ori): self.is_goal(x, y)
-            #heuristic = lambda (pos, ori): sum(numpy.abs(np.asarray(pos) - self.pos))/3.0
-            heuristic = lambda (pos, ori): self.map[pos]/3.0
+            #heuristic = lambda (pos, ori): sum(numpy.abs(np.asarray(pos) - self.pos)) / 3.0
+            heuristic = lambda (pos, ori): self.map[pos] / 3.0
             actions_with_turn = lambda (pos, ori): self.possible_actions(pos, ori, rotate_and_move=True)
             self.path = astar.search(initial, is_goal, heuristic, actions_with_turn)
             logger.info("New path: ", self.path)
@@ -168,7 +168,7 @@ class Robot(object):
         next_point = self.to_explore[-1]
         initial = tuplify(self.pos), tuplify(self.ori)
         is_goal = lambda ((x, y), ori), target=next_point: x == target[0] and y == target[1]
-        heuristic = lambda (pos, ori): sum(numpy.abs(np.asarray(pos) - self.pos))/3.0
+        heuristic = lambda (pos, ori): sum(numpy.abs(np.asarray(pos) - self.pos)) / 3.0
         actions = lambda (pos, ori): self.possible_actions(pos, ori)
         path = astar.search(initial, is_goal, heuristic, actions)
         return path[-1][0]
