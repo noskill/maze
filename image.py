@@ -142,7 +142,6 @@ class Image(object):
         """
         self.new_pos = self.origin + self.sq_size / 2.0 + (self.sq_size * pos)
         threshold = 0.1
-        print self.new_pos
         while threshold < numpy.linalg.norm(self.pos - self.new_pos):
             time.sleep(0.1)
 
