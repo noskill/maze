@@ -280,11 +280,11 @@ class Robot(object):
         m_right = numpy.dot(self.ori, right)
 
 
-        subtract = lambda w: w + [(x/abs(x) * -1 if x else 0) for x in w]
+        substract = lambda w: w + [(x/abs(x) * -1 if x else 0) for x in w]
 
         for m_to in [m_left, m_strait, m_right]:
             # there is wall between these positions
-            m_from = self.pos + subtract(m_to)
+            m_from = self.pos + substract(m_to)
             m_to += self.pos
             if self.is_valid(*m_to):
                 if self.map.is_connected(m_from, m_to):
