@@ -114,7 +114,7 @@ class Robot(object):
             result = self.explore_run(sensors)
         else:
             result = self.final_run(sensors)
-            print "Runtime: ", self.runtime
+            logger.debug("Runtime: ", self.runtime)
         if result == ("Reset", "Reset"):
             return result
         self.runtime[self.run] += 1
