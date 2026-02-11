@@ -1,5 +1,5 @@
 import logging
-import Queue
+from queue import PriorityQueue
 
 
 logger = logging.getLogger(__name__)
@@ -24,11 +24,11 @@ def search(initial, is_goal, heuristic, actions):
     list of (action to apply in state, state) pairs leading from initial state to a goal state
     """
     # path_cost={curretn_pos:prev_pos,cost , prev action}
-    path_cost = { initial: (None, heuristic(initial), None)}
+    path_cost = { initial: (None, heuristic(*initial), None)}
     open = set()
     open.add(initial)
     explored = set()
-    queue = Queue.PriorityQueue()
+    queue = PriorityQueue()
     # put initial state with the cost from path_cost
     queue.put((path_cost[initial][1], initial))
 
@@ -43,18 +43,18 @@ def search(initial, is_goal, heuristic, actions):
         min_f, min_pos = queue.get()
         if min_pos in open:
             open.remove(min_pos)
-        logger.info("Exploring: ", min_pos, "cost: ", min_f)
-        if is_goal(min_pos):
+        logger.info("Exploring: %s cost: %s", min_pos, min_f)
+        if is_goal(*min_pos):
             found = True
             goal = min_pos
             break
-        min_pos_cost = min_f - heuristic(min_pos)
-        for (new_pos, action) in actions(min_pos):
-            new_cost = min_pos_cost + 1 + heuristic(new_pos)
+        min_pos_cost = min_f - heuristic(*min_pos)
+        for (new_pos, action) in actions(*min_pos):
+            new_cost = min_pos_cost + 1 + heuristic(*new_pos)
             #  if new pos not in open or in open with higher cost
             if new_pos not in explored and (new_pos not in open or new_cost < path_cost[new_pos][1]):
                 open.add(new_pos)
-                logger.info("Adding: prev pos ", min_pos,"action: ", action, "new_pos ",  new_pos, "cost ",  new_cost)
+                logger.info("Adding: prev pos %s action: %s new_pos %s cost %s", min_pos, action, new_pos, new_cost)
                 path_cost[new_pos] = (min_pos, new_cost, action)
                 queue.put((new_cost, new_pos))
         #place node in explored
@@ -64,11 +64,10 @@ def search(initial, is_goal, heuristic, actions):
         prev_pos = path_cost[goal][0]
         prev_act = path_cost[goal][2]
         result.append((prev_act, prev_pos))
-        logger.info("appending to result ", prev_pos, prev_act)
+        logger.info("appending to result %s %s", prev_pos, prev_act)
         while prev_pos is not None and result[-1][1] != initial:
             prev_pos = path_cost[result[-1][1]][0]
             prev_act = path_cost[result[-1][1]][2]
-            logger.info("appending to result ", prev_pos, prev_act)
+            logger.info("appending to result %s %s", prev_pos, prev_act)
             result.append((prev_act, prev_pos))
     return result
-

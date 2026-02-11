@@ -2,6 +2,7 @@ import time
 import numpy
 import pygame
 from math import pi
+import threading
 
 
 class Image(object):
@@ -17,6 +18,7 @@ class Image(object):
         self.RLeft = numpy.asarray([[0, -1],[1, 0]])
         self.text_cache = {}
         self.text_map = {}
+        self._lock = threading.Lock()
 
         # Fill background
         background = pygame.Surface(self.screen.get_size())
@@ -37,8 +39,8 @@ class Image(object):
         self.screen.blit(background, (0, 0))
         pygame.display.flip()
         self.sq_size = 50
-        print textpos.centerx
-        print textpos.centery
+        print (textpos.centerx)
+        print (textpos.centery)
 
         # maze centered on (centr_x, centr_y), squares are 40 pixels in length.
         self.origin = numpy.asarray([centr_x, centr_y], dtype='float64') + [(self.dim * self.sq_size / -2.0) for _ in range(2)]
@@ -55,10 +57,14 @@ class Image(object):
         """
         Reset arrow to initial position and orientation
         """
-        self.arrow = pygame.transform.scale(pygame.image.load('./arrow up.png'), [self.sq_size - self.sq_size/4 for _ in range(2)])
-        self.pos = self.origin + self.sq_size / 2.0
-        self.new_pos = self.pos
-        self.new_ang = 0
+        with self._lock:
+            self.arrow = pygame.transform.scale(
+                pygame.image.load('./arrow up.png'),
+                [self.sq_size - self.sq_size/4 for _ in range(2)],
+            )
+            self.pos = self.origin + self.sq_size / 2.0
+            self.new_pos = self.pos
+            self.new_ang = 0
 
     def draw_box(self):
         """
@@ -92,14 +98,16 @@ class Image(object):
         center = (t_from + t_to) / 2
         start_pos = numpy.dot(self.RLeft,  t_from - center) * -1 + center
         end_pos = numpy.dot(self.RLeft,  t_from - center) * 1 + center
-        pygame.draw.line(self.background, (0,0,0), self._flip_y(start_pos), self._flip_y(end_pos))
+        with self._lock:
+            pygame.draw.line(self.background, (0,0,0), self._flip_y(start_pos), self._flip_y(end_pos))
 
     def update_text(self, a_pos, a_value):
         value = str(a_value)
-        if self.text_cache.get(value, None) == None:
-            self.text_cache[value] = self.font.render(value, 1, (10, 10, 10))
-        pos = self.origin + self.sq_size * numpy.asarray(a_pos) + self.sq_size / 2
-        self.text_map[tuple(self._flip_y(pos))] = self.text_cache[value]
+        with self._lock:
+            if self.text_cache.get(value, None) == None:
+                self.text_cache[value] = self.font.render(value, 1, (10, 10, 10))
+            pos = self.origin + self.sq_size * numpy.asarray(a_pos) + self.sq_size / 2
+            self.text_map[tuple(self._flip_y(pos))] = self.text_cache[value]
 
     def update(self, delta):
         """
@@ -111,47 +119,57 @@ class Image(object):
         -------
         Returns: None
         """
-        self.screen.blit(self.background, (0, 0))
-        for (p, t) in self.text_map.items():
-            self.screen.blit(t, p)
-        threshold = 0.1
-        if threshold < abs(self.new_ang):
-            # 90 degrees in one second
-            #ang_delta = 90 * delta / 1000 * self.new_ang / abs(self.new_ang)
-            ang_delta = self.new_ang
-            if abs(self.new_ang) - abs(ang_delta) < 1:
+        with self._lock:
+            self.screen.blit(self.background, (0, 0))
+            for (p, t) in self.text_map.items():
+                self.screen.blit(t, p)
+            threshold = 0.1
+            if threshold < abs(self.new_ang):
+                # 90 degrees in one second
+                #ang_delta = 90 * delta / 1000 * self.new_ang / abs(self.new_ang)
                 ang_delta = self.new_ang
-            self.arrow = pygame.transform.rotate(self.arrow, ang_delta)
-            self.new_ang -= ang_delta
+                if abs(self.new_ang) - abs(ang_delta) < 1:
+                    ang_delta = self.new_ang
+                self.arrow = pygame.transform.rotate(self.arrow, ang_delta)
+                self.new_ang -= ang_delta
 
+            dist = numpy.linalg.norm(self.pos - self.new_pos)
 
-        dist = numpy.linalg.norm(self.pos - self.new_pos)
-
-        if threshold < dist:
-            vec = self.new_pos - self.pos
-            # sq_size in one second
-            # to do 1 sec
-            self.pos += vec / numpy.linalg.norm(vec) * float(delta) / 500 * self.sq_size
-            if numpy.linalg.norm(self.pos - self.new_pos) < 2:
-                self.pos = self.new_pos
-        self.screen.blit(self.arrow, self._flip_y(self.pos))
+            if threshold < dist:
+                vec = self.new_pos - self.pos
+                # sq_size in one second
+                # to do 1 sec
+                self.pos += vec / numpy.linalg.norm(vec) * float(delta) / 500 * self.sq_size
+                if numpy.linalg.norm(self.pos - self.new_pos) < 2:
+                    self.pos = self.new_pos
+            self.screen.blit(self.arrow, self._flip_y(self.pos))
 
     def move(self, pos):
         """
         Move mouse to new position
         """
-        self.new_pos = self.origin + self.sq_size / 2.0 + (self.sq_size * pos)
+        with self._lock:
+            self.new_pos = self.origin + self.sq_size / 2.0 + (self.sq_size * pos)
         threshold = 0.1
-        while threshold < numpy.linalg.norm(self.pos - self.new_pos):
+        while True:
+            with self._lock:
+                dist = numpy.linalg.norm(self.pos - self.new_pos)
+            if dist <= threshold:
+                break
             time.sleep(0.1)
 
     def rotate(self, ang):
         """
         Rotate
         """
-        self.new_ang = ang * 180 / pi
+        with self._lock:
+            self.new_ang = ang * 180 / pi
         threshold = 0.01
-        while threshold < abs(self.new_ang):
+        while True:
+            with self._lock:
+                cur_ang = abs(self.new_ang)
+            if cur_ang <= threshold:
+                break
             time.sleep(0.1)
 
 

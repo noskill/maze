@@ -37,7 +37,7 @@ def main():
     arrow = pygame.transform.scale(pygame.image.load('./arrow up.png'), [sq_size - sq_size/4 for _ in range(2)])
     box = arrow.get_rect()
     pos = origin + [box.width/4, box.height]
-    print pos
+    print(pos)
 
     def flip_y(array):
         return array * [1, -1] +  [0, max_coord[1] + origin[1]]

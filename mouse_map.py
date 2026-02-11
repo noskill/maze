@@ -22,22 +22,30 @@ class Map():
         for i in range(self.dimentions[0]):
             self.graph.append([Node() for x in range(self.dimentions[1])])
  
-    def remove_edge(self, (x1, y1), (x2, y2)):
+    def remove_edge(self, point0, point1):
+       (x1, y1) = point0
+       (x2, y2) = point1
        self.graph[x1][y1].pop(self.graph[x1][y1].index((x2,y2)))
        self.graph[x2][y2].pop(self.graph[x2][y2].index((x1,y1)))
 
-    def add_edge(self, (x1, y1), (x2, y2)):
+    def add_edge(self, point0, point1):
+        (x1, y1) = point0
+        (x2, y2) = point1
         if not self.is_connected((x1, y1), (x2, y2)):
             self.graph[x1][y1].append((x2, y2))
             self.graph[x2][y2].append((x1, y1))
 
-    def is_connected(self, (x1, y1), (x2, y2)):
+    def is_connected(self, point0, point1):
+       (x1, y1) = point0
+       (x2, y2) = point1
        return (x2, y2) in self.graph[x1][y1]
 
-    def __getitem__(self, (x1, y1)):
+    def __getitem__(self, point):
+       (x1, y1) = point
        return self.graph[x1][y1].data
 
-    def __setitem__(self, (x1, y1), data):
+    def __setitem__(self, point, data):
+       (x1, y1) = point
        self.graph[x1][y1].data = data
    
     def __str__(self):

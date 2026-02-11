@@ -6,7 +6,7 @@ from mouse_map import Map
 import logging
 
 
-logger = logging.getLogger()
+logger = logging.getLogger('Robot')
 np = numpy
 
 def angle(v1, v2):
@@ -114,7 +114,7 @@ class Robot(object):
             result = self.explore_run(sensors)
         else:
             result = self.final_run(sensors)
-            logger.debug("Runtime: ", self.runtime)
+            logger.debug("Runtime: %s", self.runtime)
         if result == ("Reset", "Reset"):
             return result
         self.runtime[self.run] += 1
@@ -138,14 +138,20 @@ class Robot(object):
         using a-star algorithm
         """
         self.process_sensors(sensors)
+        def run_astar(initial, is_goal, heuristic, rotate_and_move):
+            def actions(pos, ori):
+                return self.possible_actions(pos, ori, rotate_and_move=rotate_and_move)
+            return astar.search(initial, is_goal, heuristic, actions)
+
         def on_map_change():
             initial = ((0, 0), ((1, 0), (0,1)))
-            is_goal = lambda ((x, y), ori): self.is_goal(x, y)
+            def is_goal(coord, ori):
+                return self.is_goal(coord[0], coord[1])
             #heuristic = lambda (pos, ori): sum(numpy.abs(np.asarray(pos) - self.pos)) / 3.0
-            heuristic = lambda (pos, ori): self.map[pos] / 3.0
-            actions_with_turn = lambda (pos, ori): self.possible_actions(pos, ori, rotate_and_move=True)
-            self.path = astar.search(initial, is_goal, heuristic, actions_with_turn)
-            logger.info("New path: ", self.path)
+            def heuristic(pos, ori):
+                return self.map[pos] / 3.0
+            self.path = run_astar(initial, is_goal, heuristic, rotate_and_move=True)
+            logger.info("New path: %s", self.path)
             self.to_explore = []
             for item in self.path:
                 pos = item[1][0]
@@ -154,8 +160,8 @@ class Robot(object):
         if self.path is None:
             on_map_change()
         self.call_on_map_change = on_map_change
-        logger.info("To explore: ", self.to_explore)
-        logger.info("Pos: ", self.pos)
+        logger.info("To explore: %s", self.to_explore)
+        logger.info("Pos: %s", self.pos)
 
         if len(self.to_explore) and all(self.pos == self.to_explore[-1]):
             self.to_explore.pop(-1)
@@ -167,10 +173,11 @@ class Robot(object):
 
         next_point = self.to_explore[-1]
         initial = tuplify(self.pos), tuplify(self.ori)
-        is_goal = lambda ((x, y), ori), target=next_point: x == target[0] and y == target[1]
-        heuristic = lambda (pos, ori): sum(numpy.abs(np.asarray(pos) - self.pos)) / 3.0
-        actions = lambda (pos, ori): self.possible_actions(pos, ori)
-        path = astar.search(initial, is_goal, heuristic, actions)
+        def is_goal(coord, ori, target=next_point):
+            return coord[0] == target[0] and coord[1] == target[1]
+        def heuristic(pos, ori):
+            return sum(numpy.abs(np.asarray(pos) - self.pos)) / 3.0
+        path = run_astar(initial, is_goal, heuristic, rotate_and_move=False)
         return path[-1][0]
 
     def reset(self):
@@ -279,12 +286,9 @@ class Robot(object):
         m_strait = numpy.dot(self.ori, strait)
         m_right = numpy.dot(self.ori, right)
 
-
-        substract = lambda w: w + [(x/abs(x) * -1 if x else 0) for x in w]
-
         for m_to in [m_left, m_strait, m_right]:
             # there is wall between these positions
-            m_from = self.pos + substract(m_to)
+            m_from = self.pos + (m_to - numpy.sign(m_to))
             m_to += self.pos
             if self.is_valid(*m_to):
                 if self.map.is_connected(m_from, m_to):
@@ -292,9 +296,9 @@ class Robot(object):
                     self.map.remove_edge(m_from, m_to)
                     self.update_map_from(m_to)
                     self.update_map_from(m_from)
-                    self.image.draw_line_between(m_from, m_to)
                     if self.call_on_map_change is not None:
                         self.call_on_map_change()
+                self.image.draw_line_between(m_from, m_to)
 
 
     def get_candidate_pos(self, a_pos):
@@ -343,14 +347,14 @@ class Robot(object):
             if all(x in self.goal for x in pos):
                 continue
             tmp = []
-            min_dist = sys.maxint
+            min_dist = 1_000_000
             for m in self.moves:
                 neib = pos + m
                 if self.is_valid(*neib) and self.map.is_connected(pos, neib):
                     tmp.append(neib)
                     if self.map[neib] < min_dist:
                         min_dist = self.map[neib]
-            assert(min_dist != sys.maxint)
+            assert(min_dist != 1_000_000)
             if self.map[pos] < min_dist + 1:
                 logger.info(pos)
                 logger.info("before {}".format(self.map[pos]))
@@ -358,5 +362,3 @@ class Robot(object):
                 self.image.update_text(pos, min_dist + 1)
                 logger.info("after {}".format(self.map[pos]))
                 stack.extend(tmp)
-
-
