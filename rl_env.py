@@ -56,9 +56,6 @@ DEFAULT_ACTIONS: Tuple[Tuple[int, int], ...] = (
     (0, 1),
     (0, 2),
     (0, 3),
-    (0, -1),
-    (0, -2),
-    (0, -3),
 )
 
 
@@ -75,6 +72,28 @@ class MazeInstance:
         self.spec = spec
         self._tmp_path: Optional[str] = None
         self._maze = self._build_maze(spec)
+        self._steps = 0
+        self.visitation = np.zeros((self._maze.dim, self._maze.dim), dtype=int)
+
+    def infos(self):
+        result = dict()
+        unique = (self.visitation > 0).astype(float)
+        result['coverage'] = unique.mean()
+        result['effective_coverage'] = unique.sum()/min(self._steps + 1, self.dim * self.dim)
+        return result
+
+    def reset(self, location=None):
+        self.visitation.fill(0)
+        if location is not None:
+            self.visitation[*location] = 1
+        self._steps = 0
+
+    def add_step(self):
+        self._steps += 1
+
+    @property
+    def step(self):
+        return self._steps
 
     @property
     def maze(self) -> Maze:
@@ -313,6 +332,8 @@ class MazeVecEnv:
         self._location.fill(0)
         self._heading_idx.fill(0)
         self._step_count.fill(0)
+        for i, maze in enumerate(self._mazes):
+            maze.reset(self._location[i])
 
         if self._renderer is not None:
             self._renderer.reset_pose(self._location[0], int(self._heading_idx[0]))
@@ -366,6 +387,8 @@ class MazeVecEnv:
                     blocked = True
                     break
 
+        if not blocked:
+            self._mazes[env_idx].visitation[*self._location[env_idx]] += 1
         return moved, blocked
 
     def step(self, actions):
@@ -381,6 +404,7 @@ class MazeVecEnv:
         infos: List[Dict] = []
 
         for i in range(self.num_envs):
+            self._mazes[i].add_step() 
             action_idx = int(actions[i])
             if action_idx < 0 or action_idx >= len(self.action_table):
                 raise ValueError(f"Invalid action index {action_idx} for env {i}")
@@ -418,6 +442,7 @@ class MazeVecEnv:
                 "sensor": self._sensors(i),
                 "step_count": int(self._step_count[i]),
             }
+            info.update(self._mazes[i].infos())
             infos.append(info)
 
             if self.auto_reset and (terminated[i] or truncated[i]):
@@ -441,6 +466,7 @@ class MazeVecEnv:
         self._location[env_idx] = 0
         self._heading_idx[env_idx] = 0
         self._step_count[env_idx] = 0
+        self._mazes[env_idx].reset(self._location[env_idx])
 
         if self._renderer is not None and env_idx == 0:
             self._renderer.reset_pose(self._location[0], int(self._heading_idx[0]))
