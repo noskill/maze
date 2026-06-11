@@ -47,6 +47,13 @@ DIR_REVERSE = {
     "left": "right",
 }
 
+DIR_WALL_EDGE = {
+    "up": ("h", 0, 1),
+    "right": ("v", 1, 0),
+    "down": ("h", 0, 0),
+    "left": ("v", 0, 0),
+}
+
 # Discrete action table: (rotation_degrees, movement_cells)
 # rotation in {-90, 0, +90}, movement clipped to [-3, 3]
 DEFAULT_ACTIONS: Tuple[Tuple[int, int], ...] = (
@@ -74,16 +81,24 @@ class MazeInstance:
         self._maze = self._build_maze(spec)
         self._steps = 0
         self.visitation = np.zeros((self._maze.dim, self._maze.dim), dtype=int)
+        self._all_walls = self._build_wall_set()
+        self._border_walls = self._build_border_wall_set()
+        self.explored_walls = set()
 
     def infos(self):
         result = dict()
         unique = (self.visitation > 0).astype(float)
         result['coverage'] = unique.mean()
         result['effective_coverage'] = unique.sum()/min(self._steps + 1, self.dim * self.dim)
+        result['wall_coverage'] = len(self.explored_walls) / max(1, len(self._all_walls))
+        result['walls_explored'] = len(self.explored_walls)
+        result['walls_total'] = len(self._all_walls)
         return result
 
     def reset(self, location=None):
         self.visitation.fill(0)
+        self.explored_walls.clear()
+        self.explored_walls.update(self._border_walls)
         if location is not None:
             self.visitation[*location] = 1
         self._steps = 0
@@ -115,6 +130,38 @@ class MazeInstance:
             except OSError:
                 pass
         self._tmp_path = None
+
+    def observe_walls(self, location: Sequence[int], heading: str) -> None:
+        loc = np.asarray(location, dtype=np.int64)
+        for direction in DIR_SENSORS[heading]:
+            distance = int(self._maze.dist_to_wall(loc.tolist(), direction))
+            wall_cell = loc + DIR_MOVE[direction] * distance
+            self.explored_walls.add(self._wall_edge(wall_cell, direction))
+
+    def _build_wall_set(self):
+        walls = set()
+        for x in range(self._maze.dim):
+            for y in range(self._maze.dim):
+                cell = [x, y]
+                for direction in HEADINGS:
+                    if not self._maze.is_permissible(cell, direction):
+                        walls.add(self._wall_edge(cell, direction))
+        return walls
+
+    def _build_border_wall_set(self):
+        walls = set()
+        max_coord = self._maze.dim - 1
+        for i in range(self._maze.dim):
+            walls.add(self._wall_edge([i, 0], "down"))
+            walls.add(self._wall_edge([i, max_coord], "up"))
+            walls.add(self._wall_edge([0, i], "left"))
+            walls.add(self._wall_edge([max_coord, i], "right"))
+        return walls
+
+    @staticmethod
+    def _wall_edge(cell: Sequence[int], direction: str):
+        edge_kind, dx, dy = DIR_WALL_EDGE[direction]
+        return edge_kind, int(cell[0]) + dx, int(cell[1]) + dy
 
     def _build_maze(self, spec: MazeSpec) -> Maze:
         if spec.maze_path:
@@ -353,6 +400,7 @@ class MazeVecEnv:
         heading = self._heading_name(env_idx)
         loc = self._location[env_idx].tolist()
         vals = [maze.dist_to_wall(loc, d) for d in DIR_SENSORS[heading]]
+        self._mazes[env_idx].observe_walls(loc, heading)
         return np.asarray(vals, dtype=np.float32)
 
     def _apply_rotation(self, env_idx: int, rotation: int) -> None:
