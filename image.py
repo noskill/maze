@@ -158,6 +158,15 @@ class Image(object):
                 break
             time.sleep(0.1)
 
+    def move_now(self, pos):
+        """
+        Move mouse to new position immediately, without waiting for update().
+        """
+        with self._lock:
+            new_pos = self.origin + self.sq_size / 2.0 + (self.sq_size * pos)
+            self.pos = new_pos
+            self.new_pos = new_pos
+
     def rotate(self, ang):
         """
         Rotate
@@ -172,6 +181,14 @@ class Image(object):
                 break
             time.sleep(0.1)
 
+    def rotate_now(self, ang):
+        """
+        Rotate immediately, without waiting for update().
+        """
+        with self._lock:
+            self.arrow = pygame.transform.rotate(self.arrow, ang * 180 / pi)
+            self.new_ang = 0
+
 
 class DummyImage(object):
     def __init__(self, *args):
@@ -183,7 +200,13 @@ class DummyImage(object):
     def move(self, pos):
         pass
 
+    def move_now(self, pos):
+        pass
+
     def rotate(self, ang):
+        pass
+
+    def rotate_now(self, ang):
         pass
 
     def update(self, delta):

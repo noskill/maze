@@ -11,8 +11,6 @@ from __future__ import annotations
 
 import os
 import tempfile
-import threading
-import time
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Sequence, Tuple
 
@@ -194,18 +192,16 @@ class MazeRenderer:
         self._maze = maze
         self._done = False
         self._game_objects = []
-        self._thread: Optional[threading.Thread] = None
         self._status_cell = [self._maze.dim - 2, -1]
 
         pygame.init()
         size = 50 * maze.dim + 100
         screen = pygame.display.set_mode((size, size))
+        self._clock = pygame.time.Clock()
         self.image = Image(maze.dim, screen)
         self._game_objects.append(self.image)
         self._draw_static_walls()
-
-        self._thread = threading.Thread(target=self._loop, daemon=True)
-        self._thread.start()
+        self._tick()
 
     def _draw_static_walls(self) -> None:
         # Draw only right/up walls once to avoid duplicates.
@@ -225,47 +221,47 @@ class MazeRenderer:
         self.image.text_cache.pop(text, None)
         self.image.update_text(self._status_cell, text)
 
-    def _loop(self) -> None:
-        clock = self._pygame.time.Clock()
-        while not self._done:
-            for event in self._pygame.event.get():
-                if event.type == self._pygame.QUIT:
-                    self._done = True
-            dt_ms = clock.tick(30)
-            for obj in self._game_objects:
-                obj.update(dt_ms)
-            self._pygame.display.update()
+    def _tick(self) -> None:
+        if self._done:
+            return
+        for event in self._pygame.event.get():
+            if event.type == self._pygame.QUIT:
+                self._done = True
+        dt_ms = self._clock.tick(30)
+        for obj in self._game_objects:
+            obj.update(dt_ms)
+        self._pygame.display.update()
+
+    def save_frame(self, path: str) -> None:
+        self._tick()
+        self._pygame.image.save(self.image.screen, path)
 
     def reset_pose(self, location: np.ndarray, heading_idx: int) -> None:
         self.image.reset_arrow()
-        self.image.move(location.astype(np.float64))
+        self.image.move_now(location.astype(np.float64))
         self.set_status(step=0, action_idx=-1, rotation=0, movement=0)
         if heading_idx == 1:
-            self.image.rotate(-np.pi / 2.0)
+            self.image.rotate_now(-np.pi / 2.0)
         elif heading_idx == 2:
-            self.image.rotate(np.pi)
+            self.image.rotate_now(np.pi)
         elif heading_idx == 3:
-            self.image.rotate(np.pi / 2.0)
+            self.image.rotate_now(np.pi / 2.0)
+        self._tick()
 
     def update_pose(self, location: np.ndarray, prev_heading_idx: int, heading_idx: int) -> None:
-        self.image.move(location.astype(np.float64))
+        self.image.move_now(location.astype(np.float64))
         delta = (int(heading_idx) - int(prev_heading_idx)) % 4
         if delta == 1:
-            self.image.rotate(-np.pi / 2.0)
+            self.image.rotate_now(-np.pi / 2.0)
         elif delta == 3:
-            self.image.rotate(np.pi / 2.0)
+            self.image.rotate_now(np.pi / 2.0)
         elif delta == 2:
-            self.image.rotate(np.pi)
+            self.image.rotate_now(np.pi)
+        self._tick()
 
     def close(self) -> None:
-        if self._thread is None:
-            return
         self._done = True
-        time.sleep(0.05)
-        self._thread.join(timeout=1.0)
         self._pygame.quit()
-        self._thread = None
-
 
 class MazeVecEnv:
     """Vectorized maze environment.
@@ -352,6 +348,11 @@ class MazeVecEnv:
         for maze_inst in self._mazes:
             maze_inst.close()
         self._mazes = []
+
+    def save_render_frame(self, path: str) -> None:
+        if self._renderer is None:
+            raise RuntimeError("save_render_frame requires render=True")
+        self._renderer.save_frame(path)
 
     def _make_spec_for_env(self, env_idx: int) -> MazeSpec:
         del env_idx
