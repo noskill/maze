@@ -17,8 +17,8 @@ from typing import Dict, List, Optional, Sequence, Tuple
 import numpy as np
 import torch
 
-from genmaze import generate_maze, write_maze
-from maze import Maze
+from .genmaze import generate_maze, write_maze
+from .maze import Maze
 
 
 HEADINGS: Tuple[str, ...] = ("up", "right", "down", "left")
